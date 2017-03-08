@@ -50,10 +50,10 @@ CONFIG = Configuration()
 CONFIG.input_layers = 2
 CONFIG.output_layers = 2
 CONFIG.amount_of_dropout = 0.2
-CONFIG.hidden_size = 256
+CONFIG.hidden_size = 64
 CONFIG.initialization = "he_normal"  # : Gaussian initialization scaled by fan-in (He et al., 2014)
-CONFIG.number_of_chars = 100
-CONFIG.max_input_len = 60
+CONFIG.number_of_chars = 41
+CONFIG.max_input_len = 50
 CONFIG.inverted = True
 
 # parameters for the training:
@@ -69,14 +69,14 @@ DIGEST = sha256(json.dumps(CONFIG.__dict__, sort_keys=True).encode("utf-8")).hex
 # Parameters for the dataset
 MIN_INPUT_LEN = 5
 AMOUNT_OF_NOISE = 0.2 / CONFIG.max_input_len
-CHARS = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ .")
+CHARS = list("abcdefghijklmnopqrstuvwxyz .")
 PADDING = "☕"
 
-DATA_FILES_PATH = "data/wikivoyage"
+DATA_FILES_PATH = "data/"
 DATA_FILES_FULL_PATH = os.path.expanduser(DATA_FILES_PATH)
 DATA_FILES_URL = "http://www.statmt.org/wmt14/training-monolingual-news-crawl/news.2013.en.shuffled.gz"
 NEWS_FILE_NAME_COMPRESSED = os.path.join(DATA_FILES_FULL_PATH, "news.2013.en.shuffled.gz")  # 1.1 GB
-NEWS_FILE_NAME_ENGLISH = "output.txt" # "news.2013.en.shuffled"
+NEWS_FILE_NAME_ENGLISH = "input.txt" # "news.2013.en.shuffled"
 NEWS_FILE_NAME = os.path.join(DATA_FILES_FULL_PATH, NEWS_FILE_NAME_ENGLISH)
 NEWS_FILE_NAME_CLEAN = os.path.join(DATA_FILES_FULL_PATH, "news.2013.en.clean")
 NEWS_FILE_NAME_FILTERED = os.path.join(DATA_FILES_FULL_PATH, "news.2013.en.filtered")
@@ -96,11 +96,12 @@ RE_APOSTROPHE_FILTER = re.compile(
     re.UNICODE)
 RE_LEFT_PARENTH_FILTER = re.compile(r'[\(\[\{\⁽\₍\❨\❪\﹙\（]', re.UNICODE)
 RE_RIGHT_PARENTH_FILTER = re.compile(r'[\)\]\}\⁾\₎\❩\❫\﹚\）]', re.UNICODE)
-ALLOWED_CURRENCIES = """¥£₪$€฿₨"""
+ALLOWED_CURRENCIES = """¥£₪$€"""
 ALLOWED_PUNCTUATION = """-!?/;"'%&<>.()[]{}@#:,|=*"""
-RE_BASIC_CLEANER = re.compile(r'[^\w\s{}{}]'.format(re.escape(ALLOWED_CURRENCIES), re.escape(ALLOWED_PUNCTUATION)),
+RE_BASIC_CLEANER = re.compile(r'[^\w\s{}]'.format(re.escape(ALLOWED_CURRENCIES)),
                               re.UNICODE)
-
+RE_PUNCT_CLEANER = re.compile(r'[{}]'.format(re.escape(ALLOWED_PUNCTUATION)),
+                              re.UNICODE)
 
 # pylint:disable=invalid-name
 
@@ -358,7 +359,10 @@ def clean_text(text):
     result = RE_APOSTROPHE_FILTER.sub("'", result)
     result = RE_LEFT_PARENTH_FILTER.sub("(", result)
     result = RE_RIGHT_PARENTH_FILTER.sub(")", result)
+    result = RE_PUNCT_CLEANER.sub(" ", result)
     result = RE_BASIC_CLEANER.sub('', result)
+    result = re.sub(r"\n+", r"\n", result)
+    result = re.sub(r"[ ]+", r" ", result)
     return result
 
 
@@ -542,11 +546,11 @@ def train_speller(from_file=None):
 if __name__ == '__main__':
     #download_the_news_data()
     #uncompress_data()
-    # preprocesses_data_clean()
-    # preprocesses_data_analyze_chars()
-    # preprocesses_data_filter()
-    # preprocesses_split_lines()  # --- Choose this step or:
+    preprocesses_data_clean()
+    preprocesses_data_analyze_chars()
+    preprocesses_data_filter()
+    preprocesses_split_lines()  # --- Choose this step or:
     # preprocesses_split_lines2()
-    # preprocess_partition_data()
+    preprocess_partition_data()
     # train_speller(os.path.join(DATA_FILES_FULL_PATH, "keras_spell_e15.h5"))
     train_speller()
