@@ -17,6 +17,7 @@ import itertools
 import json
 import logging
 import os
+import pdb
 import re
 from collections import Counter
 from hashlib import sha256
@@ -50,16 +51,16 @@ CONFIG = Configuration()
 CONFIG.input_layers = 2
 CONFIG.output_layers = 2
 CONFIG.amount_of_dropout = 0.2
-CONFIG.hidden_size = 64
+CONFIG.hidden_size = 128
 CONFIG.initialization = "he_normal"  # : Gaussian initialization scaled by fan-in (He et al., 2014)
-CONFIG.number_of_chars = 41
-CONFIG.max_input_len = 50
+CONFIG.number_of_chars = 28
+CONFIG.max_input_len = 30
 CONFIG.inverted = True
 
 # parameters for the training:
 CONFIG.number_of_iterations = 20000
 CONFIG.epochs_per_iteration = 500
-CONFIG.batch_size = 64  # As the model changes in size, play with the batch size to best fit the process in memory
+CONFIG.batch_size = 256  # As the model changes in size, play with the batch size to best fit the process in memory
 CONFIG.samples_per_epoch = 1000000
 CONFIG.number_of_validation_samples = 10000
 # pylint:enable=attribute-defined-outside-init
@@ -68,15 +69,15 @@ DIGEST = sha256(json.dumps(CONFIG.__dict__, sort_keys=True).encode("utf-8")).hex
 
 # Parameters for the dataset
 MIN_INPUT_LEN = 5
-AMOUNT_OF_NOISE = 0.2 / CONFIG.max_input_len
-CHARS = list("abcdefghijklmnopqrstuvwxyz .")
+AMOUNT_OF_NOISE = 0.5 / CONFIG.max_input_len
 PADDING = "☕"
+CHARS = list("abcdefghijklmnopqrstuvwxyz ") + [PADDING]
 
-DATA_FILES_PATH = "data/"
+DATA_FILES_PATH = "data/wikivoyage/"
 DATA_FILES_FULL_PATH = os.path.expanduser(DATA_FILES_PATH)
 DATA_FILES_URL = "http://www.statmt.org/wmt14/training-monolingual-news-crawl/news.2013.en.shuffled.gz"
 NEWS_FILE_NAME_COMPRESSED = os.path.join(DATA_FILES_FULL_PATH, "news.2013.en.shuffled.gz")  # 1.1 GB
-NEWS_FILE_NAME_ENGLISH = "input.txt" # "news.2013.en.shuffled"
+NEWS_FILE_NAME_ENGLISH = "output.txt" # "news.2013.en.shuffled"
 NEWS_FILE_NAME = os.path.join(DATA_FILES_FULL_PATH, NEWS_FILE_NAME_ENGLISH)
 NEWS_FILE_NAME_CLEAN = os.path.join(DATA_FILES_FULL_PATH, "news.2013.en.clean")
 NEWS_FILE_NAME_FILTERED = os.path.join(DATA_FILES_FULL_PATH, "news.2013.en.filtered")
@@ -208,14 +209,14 @@ def generate_model(output_len, chars=None):
     # note: in a situation where your input sequences have a variable length,
     # use input_shape=(None, nb_feature).
     for layer_number in range(CONFIG.input_layers):
-        model.add(recurrent.LSTM(CONFIG.hidden_size, input_shape=(None, len(chars)), init=CONFIG.initialization,
+        model.add(recurrent.GRU(CONFIG.hidden_size, input_shape=(None, len(chars)), init=CONFIG.initialization,
                                  return_sequences=layer_number + 1 < CONFIG.input_layers))
         model.add(Dropout(CONFIG.amount_of_dropout))
     # For the decoder's input, we repeat the encoded input for each time step
     model.add(RepeatVector(output_len))
     # The decoder RNN could be multiple layers stacked or a single layer
     for _ in range(CONFIG.output_layers):
-        model.add(recurrent.LSTM(CONFIG.hidden_size, return_sequences=True, init=CONFIG.initialization))
+        model.add(recurrent.GRU(CONFIG.hidden_size, return_sequences=True, init=CONFIG.initialization))
         model.add(Dropout(CONFIG.amount_of_dropout))
 
     # For each of step of the output sequence, decide which character should be chosen
@@ -262,7 +263,7 @@ class CharacterTable(object):
         """Decode from one-hot"""
         if calc_argmax:
             X = X.argmax(axis=-1)
-        return ''.join(self.indices_char[x] for x in X if x)
+        return ''.join(self.indices_char[x] for x in X if x is not None)
 
 
 def generator(file_name):
@@ -286,7 +287,7 @@ def generator(file_name):
                         assert len(answer) == CONFIG.max_input_len
                         question = question[::-1] if CONFIG.inverted else question
                         batch_of_questions.append(question)
-                    X, y = _vectorize(batch_of_questions, batch_of_answers, ctable)
+                    X, y = _vectorize(batch_of_questions, batch_of_answers, ctable) # X = y = (128, 30, 28)
                     yield X, y
                     batch_of_answers = []
 
@@ -354,15 +355,18 @@ def iterate_training(model, X_train, y_train, X_val, y_val, ctable):
 
 def clean_text(text):
     """Clean the text - remove unwanted chars, fold punctuation etc."""
-    result = NORMALIZE_WHITESPACE_REGEX.sub(' ', text.strip())
+    result = text.lower()
     result = RE_DASH_FILTER.sub('-', result)
     result = RE_APOSTROPHE_FILTER.sub("'", result)
     result = RE_LEFT_PARENTH_FILTER.sub("(", result)
     result = RE_RIGHT_PARENTH_FILTER.sub(")", result)
     result = RE_PUNCT_CLEANER.sub(" ", result)
     result = RE_BASIC_CLEANER.sub('', result)
+    result = re.sub(r"[0-9]+", "", result)
     result = re.sub(r"\n+", r"\n", result)
     result = re.sub(r"[ ]+", r" ", result)
+    result = NORMALIZE_WHITESPACE_REGEX.sub(' ', result.strip())
+
     return result
 
 
@@ -396,10 +400,11 @@ def preprocesses_data_analyze_chars():
 
 def read_top_chars():
     """Read the top chars we saved to file"""
-    chars = json.loads(open(CHAR_FREQUENCY_FILE_NAME).read())
-    counter = Counter(chars)
-    most_popular_chars = {key for key, _value in counter.most_common(CONFIG.number_of_chars)}
-    return most_popular_chars
+    #chars = json.loads(open(CHAR_FREQUENCY_FILE_NAME).read())
+    #counter = Counter(chars)
+    #most_popular_chars = {key for key, _value in counter.most_common(CONFIG.number_of_chars)}
+    #return most_popular_chars
+    return set(CHARS)
 
 
 def preprocesses_data_filter():
@@ -409,7 +414,7 @@ def preprocesses_data_filter():
     with open(NEWS_FILE_NAME_FILTERED, "w") as output_file:
         for line in open(NEWS_FILE_NAME_CLEAN):
             decoded_line = line
-            if decoded_line and not bool(set(decoded_line) - most_popular_chars):
+            if decoded_line.strip() and not bool(set(decoded_line) - most_popular_chars - set("\n")):
                 output_file.write(line)
     LOGGER.info("Done.")
 
@@ -478,7 +483,7 @@ def preprocesses_split_lines2():
 
 def preprocess_partition_data():
     """Set asside data for validation"""
-    answers = open(NEWS_FILE_NAME_SPLIT).read().split("\n")
+    answers = [x for x in open(NEWS_FILE_NAME_SPLIT).read().split("\n") if x]
     print('shuffle', end=" ")
     random_shuffle(answers)
     print("Done")
@@ -527,7 +532,8 @@ def train_speller_w_all_data():
     questions, answers = generate_news_data()
     chars_answer = set.union(*(set(answer) for answer in answers))
     chars_question = set.union(*(set(question) for question in questions))
-    chars = list(set.union(chars_answer, chars_question))
+    # chars = list(set.union(chars_answer, chars_question))
+    chars = CHARS
     X_train, X_val, y_train, y_val, y_maxlen, ctable = vectorize(questions, answers, chars)
     print("y_maxlen, chars", y_maxlen, "".join(chars))
     model = generate_model(y_maxlen, chars)
@@ -539,18 +545,19 @@ def train_speller(from_file=None):
     if from_file:
         model = load_model(from_file)
     else:
-        model = generate_model(CONFIG.max_input_len, chars=read_top_chars())
+        model = generate_model(CONFIG.max_input_len, chars=CHARS)
     itarative_train(model)
 
 
 if __name__ == '__main__':
     #download_the_news_data()
     #uncompress_data()
-    preprocesses_data_clean()
-    preprocesses_data_analyze_chars()
-    preprocesses_data_filter()
-    preprocesses_split_lines()  # --- Choose this step or:
+    # preprocesses_data_clean()
+    # preprocesses_data_analyze_chars()
+    # preprocesses_data_filter()
+    # preprocesses_split_lines()  # --- Choose this step or:
     # preprocesses_split_lines2()
-    preprocess_partition_data()
+    # preprocess_partition_data()
     # train_speller(os.path.join(DATA_FILES_FULL_PATH, "keras_spell_e15.h5"))
+
     train_speller()
