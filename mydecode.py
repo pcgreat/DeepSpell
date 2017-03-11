@@ -3,7 +3,7 @@ import pdb
 from keras_spell import clean_text, PADDING, CONFIG, CharacterTable, read_top_chars
 from keras.models import load_model
 import numpy as np
-model = load_model('data/wikivoyage/keras_spell_e24.h5')
+model = load_model('data/wikivoyage/keras_spell_e53.h5')
 ctable = CharacterTable(read_top_chars())
 
 

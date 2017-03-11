@@ -71,7 +71,7 @@ PADDING = "☕"
 GO = "→"
 CHARS = list("abcdefghijklmnopqrstuvwxyz ") + [PADDING] + [GO]
 
-DATA_FILES_PATH = "data/"
+DATA_FILES_PATH = "data/wikivoyage/"
 DATA_FILES_FULL_PATH = os.path.expanduser(DATA_FILES_PATH)
 DATA_FILES_URL = "http://www.statmt.org/wmt14/training-monolingual-news-crawl/news.2013.en.shuffled.gz"
 NEWS_FILE_NAME_COMPRESSED = os.path.join(DATA_FILES_FULL_PATH, "news.2013.en.shuffled.gz")  # 1.1 GB
@@ -201,9 +201,9 @@ def vectorize(questions, answers, chars=None):
     return X_train, X_val, y_train, y_val, CONFIG.max_input_len, ctable
 
 
-def generate_model(output_len, chars=None):
+def generate_model(batch_size, chars=None):
     return BabySeq2Seq(len(chars), len(chars), [(CONFIG.max_input_len, CONFIG.max_input_len + 1)],
-                       size=CONFIG.hidden_size, num_layers=2, batch_size=CONFIG.batch_size)
+                       size=CONFIG.hidden_size, num_layers=2, batch_size=batch_size)
 
 
 class Colors(object):
@@ -524,7 +524,7 @@ def generate_news_data():
 
 def train_speller(from_file=None):
     """Train the speller"""
-    model = generate_model(CONFIG.max_input_len, chars=CHARS)
+    model = generate_model(CONFIG.batch_size, chars=CHARS)
     itarative_train(model, from_file)
 
 

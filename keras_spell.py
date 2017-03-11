@@ -69,7 +69,7 @@ DIGEST = sha256(json.dumps(CONFIG.__dict__, sort_keys=True).encode("utf-8")).hex
 
 # Parameters for the dataset
 MIN_INPUT_LEN = 5
-AMOUNT_OF_NOISE = 0.5 / CONFIG.max_input_len
+AMOUNT_OF_NOISE = 0.3 / CONFIG.max_input_len
 PADDING = "☕"
 CHARS = list("abcdefghijklmnopqrstuvwxyz ") + [PADDING]
 
@@ -558,6 +558,6 @@ if __name__ == '__main__':
     # preprocesses_split_lines()  # --- Choose this step or:
     # preprocesses_split_lines2()
     # preprocess_partition_data()
-    # train_speller(os.path.join(DATA_FILES_FULL_PATH, "keras_spell_e15.h5"))
+    train_speller(os.path.join(DATA_FILES_FULL_PATH, "keras_spell_e25.h5"))
 
-    train_speller()
+    #train_speller()
